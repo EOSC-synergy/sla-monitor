@@ -1,13 +1,15 @@
 #!/bin/bash
 
-export OIDC_AGENT_ACCOUNT=egi
+
+
+export OIDC_AGENT_ACCOUNT=egi-lago
 SITES=`fedcloud site list`
 OUTPUT="out.json"
 
 IFS='
 '
 
-OWN_VOS=`fedcloud token list-vos --oidc-agent-account=egi | sort -u`
+OWN_VOS=`fedcloud token list-vos | sort -u`
 
 iscontained(){
     VO=$1
@@ -24,7 +26,7 @@ for SITE in $SITES; do
     echo -e "\n$SITE"
     [ $FIRSTSITE == "False" ] && echo "," >> $OUTPUT
     FIRSTSITE="False"
-    echo -e "\"$SITE\": {" >> $OUTPUT
+    echo -e "  \"$SITE\": {" >> $OUTPUT
     VOS=`fedcloud site show --site ${SITE}| grep name | cut -d : -f 2 | sed s"/^ //"`
     FIRSTVO="True"
     for VO in $VOS; do
@@ -32,16 +34,17 @@ for SITE in $SITES; do
         iscontained $VO && {
             [ $FIRSTVO == "False" ] && echo "," >> $OUTPUT
             FIRSTVO="False"
-            echo -en "  \"$VO\": {" >> $OUTPUT
+            echo -en "    \"$VO\": {" >> $OUTPUT
             JSON_SIPPET=`
                 fedcloud openstack quota show --site $SITE --vo $VO -f json | \
                 grep -v Site | \
                 jq '{"cores", "ram", "instances", "gigabytes", "floating-ips", "fixed-ips"}'
             `
-            echo -n "$JSON_SIPPET"| sed s/[{}]// | sed s/^/\ \ / >> $OUTPUT
-            echo -n "  }" >> $OUTPUT
+            echo -n "$JSON_SIPPET"| sed s/[{}]// | sed s/^/\ \ \ \ / >> $OUTPUT
+            echo -n "    }" >> $OUTPUT
+            echo -e "---------------------\n${JSON_SIPPET}\n------------------\n"
         } # Contained
     done # VO
-    echo "}" >> $OUTPUT
+    echo "  }" >> $OUTPUT
 done # site
 echo -e "\n}\n" >> $OUTPUT
