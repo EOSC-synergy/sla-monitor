@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import json
-import sys
 import argparse
 # import sqlite3
 from fedcloudclient.openstack import fedcloud_openstack as fc_openstack
@@ -27,7 +26,7 @@ def parseOptions():
 args = parseOptions()
 
 account_names = ['egi', 'egi-lago']
-SYNERGY_VOS = {        
+SYNERGY_VOS = {
         "lagoproject.net": "egi-lago",
         "eosc-synergy.eu": "egi",
         "covid19.eosc-synergy.eu": "egi",
