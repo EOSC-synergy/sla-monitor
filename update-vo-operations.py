@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
+# pylint disable=logging-fstring-interpolation
+'''
+Author: Marcus Hardt <hardt@kit.edu>
+Script to compare openstack information with the data in 
+https://github.com/EGI-Federation/fedcloud-catchall-operations/tree/main/sites
+
+Requires the git repository to be cloned to a local place that needs to be 
+specified with -f <full path>
+
+Requires oidc-agent to be installed
+
+Currently is using two oidc-agent configs: 'egi' and 'egi-lago' and is
+limited to the synergy VOs (because my credentials are in all of them)
+
+'''
 
 import json
 import yaml
-import sys
 import argparse
-# import sqlite3
+import os
 from fedcloudclient.openstack import fedcloud_openstack as fc_openstack
 from fedcloudclient import sites as fc_sites
 from fedcloudclient import endpoint as fc_endpoint
@@ -33,17 +47,18 @@ def yprint(data, do_print=True):
 def parseOptions():
     '''Parse the commandline options'''
     parser = argparse.ArgumentParser(description='collect-sla-statistics')
-    parser.add_argument('-o', dest='output',    default='out.md')
     parser.add_argument('-v', dest='verbose',   action='store_true',  default=False)
     parser.add_argument('-f', dest='fedcloudopsbasepath',
         default='/home/marcus/projects/synergy/fedcloud-catchall-operations/sites')
     args = parser.parse_args()
     return args
 
+######################################################################
+# Config:
 args = parseOptions()
 
 account_names = ['egi', 'egi-lago']
-SYNERGY_VOS = {        
+SYNERGY_VOS = {
         "lagoproject.net": "egi-lago",
         "eosc-synergy.eu": "egi",
         "covid19.eosc-synergy.eu": "egi",
@@ -55,146 +70,99 @@ SYNERGY_VOS = {
         # "training.egi.eu": "egi",
         # "mteam.data.kit.edu"
 
+# Get access tokens from oidc agent
 access_tokens = {an:agent.get_access_token(an) for an in account_names}
 
+# Get sites from fedcloudclient
 sites = fc_sites.list_sites()
-# yprint (sites)
-# sys.exit(0)
 
+# loop over all sites and accounts
+print (F"Loading information via fedcloudclient get projects from sites:")
 endpoints_raw={}
-for account in account_names:
-    for site in sites:
+for site in sites:
+    print (F"    {site}")
+    for account in account_names:
         # if type(endpoints_raw[site]) is not type(list):
         if endpoints_raw.get(site, None) is None:
             endpoints_raw[site] = []
-        print (F"{site} via {account}")
         try:
             endpoints_raw[site].extend(fc_endpoint.get_projects_from_sites_dict(access_tokens[account], site))
         except RuntimeError:
             if args.verbose:
                 print("Unable to get information from: {site} via {account}")
-jprint(endpoints_raw[site])
-print (F"site: {site}")
 
-endpoints_from_openstack={}
 # transform to fedcloudops-like structure
-endpoints_from_openstack[site] = [ {'name': entry['name'], 'auth':{'project_id': entry['project_id']}} for entry in endpoints_raw[site] ]
+endpoints_openstack={}
+endpoints_openstack[site] = [ {'name': entry['name'], 'auth':{'project_id': entry['project_id']}} for entry in endpoints_raw[site] ]
+endpoints_openstack = { site:
+        [ {'name': entry['name'], 'auth':{'project_id': entry['project_id']}} for entry in endpoints_raw[site] ]
+        for site in sites}
 
+if args.verbose:
+    print (F"endpoints_openstack:")
+    yprint(endpoints_openstack)
 
-print (F"endpoints_from_openstack new:")
-# yprint(endpoints_from_openstack)
-# jprint(endpoints_raw)
-jprint(endpoints_from_openstack)
+# read fedcloudops
 
+print (F"Loading information from {args.fedcloudopsbasepath}")
+endpoints_fedcloudops={}
 
-endpoints_from_fedcloudops={}
-for site in sites:
-    try:
-        with open(args.fedcloudopsbasepath+'/'+site+'.yaml', 'r') as file:
-            endpoints_from_fedcloudops[site] = yaml.safe_load(file)
-    except FileNotFoundError as e:
-        # logger.error(F"Cannot find file for {site} in {args.fedcloudopsbasepath}")
-        pass
+for yaml_file_name in os.listdir(args.fedcloudopsbasepath):
+    if yaml_file_name.endswith('.yaml'):
+        if yaml_file_name.endswith('IISAS-FedCloud-nova.yaml'):
+            continue
+        with open(args.fedcloudopsbasepath+'/'+yaml_file_name, 'r') as file:
+            temp = yaml.safe_load(file)
+            site_from_file = temp['gocdb']
+            endpoints_fedcloudops[site_from_file] = temp
+            endpoints_fedcloudops[site_from_file]['filename'] = yaml_file_name
 
-# site_yml=endpoints_from_fedcloudops[sites[inspect]]
-# yprint(site_yml)
-# jprint(site_yml)
-# print (F"\nendpoints fco:")
-# jprint (endpoints_from_fedcloudops)
+if args.verbose:
+    print (F"endpoints_fedcloudops:")
+    yprint(endpoints_fedcloudops)
 
+print ("Comparing")
 
 # COMPARE
-# report endpoints_from_openstack missing in the fco file
-
+# report endpoints_openstack missing in the fco file
 sites_to_rewrite={}
 for site in sites:
     missing_at_site = []
     site_needs_update = False
-    for vo_from_openstack in endpoints_from_openstack[site]:
+    for vo_from_openstack in endpoints_openstack[site]:
         found = False
-        for vo_from_fco in endpoints_from_fedcloudops[site]['vos']:
+        try:
+            fco_endpoints_site_vo = endpoints_fedcloudops[site]['vos']
+        except KeyError as e:
+            logger.error(F"Openstack site not found in fedcloud-catchall-operations/sites: {site}")
+            logger.error("This may be ignored for IISAS-FedCloud (sorry Viet)")
+            try:
+                fco_endpoints_site_vo = endpoints_fedcloudops[site+'-cloud']['vos']
+            except KeyError:
+                logger.error(F"cannot load for site {site}")
+        for vo_from_fco in fco_endpoints_site_vo:
             if vo_from_fco == vo_from_openstack:
                 found = True
         if not found:
             site_needs_update = True
-            print (F"   Missing at {site}: {vo_from_openstack['name']}")
+            if args.verbose:
+                print (F"   Missing at {site}: {vo_from_openstack['name']}")
             missing_at_site.append(vo_from_openstack)
+
     if site_needs_update:
-        jprint(missing_at_site)
-        sites_to_rewrite[site]=endpoints_from_fedcloudops[site]
+        #jprint(missing_at_site)
+        sites_to_rewrite[site]=endpoints_fedcloudops[site]
         sites_to_rewrite[site]['vos'].extend(missing_at_site)
-yprint(sites_to_rewrite['BIFI'])
 
 
-sys.exit(0)
-
-vos={}
-for site in sites:
-    vos[site] = [x["name"] for x in fc_sites.find_site_data(site)["vos"]]
-
-# print (F"VOs: ")
-# jprint(vos)
-def synergy_filter(vox):
-    if vox in SYNERGY_VOS:
-        return vox
-    return False
-
-# Big Gather loop
-site_label = "Site"
-vo_label="VO"
-error_code_label="error_code"
-
-command = ("quota", "show")
-results = {}
-print (F"\n{site_label:14} | {vo_label:23} | {error_code_label}")
-for site in sites:
-    results[site]={}
-    for vo in filter(synergy_filter, vos[site]):
-        error_code, result = fc_openstack(access_tokens[SYNERGY_VOS[vo]], site, vo, command)
-        results[site][vo] = result
-        print (F"{site:14} | {vo:23} | {error_code}")
-
-# jprint (results)
-
-# Output loop
-METRICS=['cores', 'ram', 'instances', 'gigabytes', 'floating-ips']
-
-
-
-output=open(args.output, "w")
-for metric in METRICS:
-    errors=[]
-    # print (F"{metric}")
-    # Table header
-    output.write(F"| {metric} |")
-    # for vo in filter(synergy_filter, vos[site][:2]):
-    for vo in SYNERGY_VOS:
-        output.write(F" {vo.split('.')[0]} |")
-
-    output.write("\n|---|")
-    for vo in SYNERGY_VOS:
-        output.write(F"---|")
-    output.write("\n")
-
-    # Table body
-    for site in results:
-        output.write(F"| {site} |")
-        for vo in SYNERGY_VOS:
-            # print (F"{site:10} | {vo:23}")
-            try:
-                value=results[site][vo][metric]
-            except KeyError:
-                value=""
-            except TypeError:
-                try:
-                    errors.append(F"Error {len(errors)+1}: {results[site][vo]}")
-                    value=F"Error {len(errors)})"
-                except Exception:
-                    value="Total Mess"
-            output.write(F" {value} |")
-        output.write("\n")
-    output.write("\n")
-    if metric == "cores":
-        output.write("\n".join(errors))
-    output.write("\n")
-output.close()
+print ("Writing")
+# write changed sites back
+for site,content in sites_to_rewrite.items():
+    try:
+        yaml_file_name = endpoints_fedcloudops[site]['filename']
+        with open(args.fedcloudopsbasepath+'/'+yaml_file_name, 'w') as file:
+            yaml.dump(content, file)
+    except FileNotFoundError as e:
+        # logger.error(F"Cannot find file for {site} in {args.fedcloudopsbasepath}")
+        pass
+print ("Done")
