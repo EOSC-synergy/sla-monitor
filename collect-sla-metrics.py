@@ -20,7 +20,7 @@ def jprint(jsondata, do_print=True):
 def parseOptions():
     '''Parse the commandline options'''
     parser = argparse.ArgumentParser(description='collect-sla-statistics')
-    parser.add_argument('-o', dest='output',    default='out.md')
+    parser.add_argument('-o', dest='output',    default='metrics/out.md')
     args = parser.parse_args()
     return args
 
