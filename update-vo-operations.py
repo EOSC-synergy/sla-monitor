@@ -160,7 +160,9 @@ print ("Writing")
 for site,content in sites_to_rewrite.items():
     try:
         yaml_file_name = endpoints_fedcloudops[site]['filename']
+        print (F"Writing changes for {yaml_file_name}")
         with open(args.fedcloudopsbasepath+'/'+yaml_file_name, 'w') as file:
+            content.pop('filename')
             yaml.dump(content, file)
     except FileNotFoundError as e:
         # logger.error(F"Cannot find file for {site} in {args.fedcloudopsbasepath}")
