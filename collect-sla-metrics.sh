@@ -2,14 +2,23 @@
 
 
 
-export OIDC_AGENT_ACCOUNT=egi-lago
+IDENTITIES="egi
+egi-lago"
+
 SITES=`fedcloud site list`
+SITES=CETA-GRID
 OUTPUT="out.json"
 
 IFS='
 '
 
-OWN_VOS=`fedcloud token list-vos | sort -u`
+OWN_VOS=""
+
+for IDENTITY in $IDENTITIES; do
+    echo IDENTITY: ${IDENTITY}
+    export OIDC_AGENT_ACCOUNT=${IDENTITY}
+    OWN_VOS="${OWN_VOS} `fedcloud token list-vos | sort -u`"
+done
 
 iscontained(){
     VO=$1
@@ -27,6 +36,10 @@ for SITE in $SITES; do
     [ $FIRSTSITE == "False" ] && echo "," >> $OUTPUT
     FIRSTSITE="False"
     echo -e "  \"$SITE\": {" >> $OUTPUT
+
+  for IDENTITY in $IDENTITIES; do
+    export OIDC_AGENT_ACCOUNT=${IDENTITY}
+
     VOS=`fedcloud site show --site ${SITE}| grep name | cut -d : -f 2 | sed s"/^ //"`
     FIRSTVO="True"
     for VO in $VOS; do
@@ -45,6 +58,10 @@ for SITE in $SITES; do
             echo -e "---------------------\n${JSON_SIPPET}\n------------------\n"
         } # Contained
     done # VO
+
+  done # IDENTITY
+
+
     echo "  }" >> $OUTPUT
 done # site
 echo -e "\n}\n" >> $OUTPUT
