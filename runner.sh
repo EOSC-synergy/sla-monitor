@@ -3,7 +3,7 @@
 STYLE_FILE=`dirname $0`/style_internal_css.html
 
 REMOTE="marcus@cvs.data.kit.edu:~/public_html/sla-monitor/"
-METRICS_DIR="metrics"
+METRICS_DIR="metrics/"
 
 CUR_YEAR=`date +%y`
 CUR_MONTH=`date +%m`
