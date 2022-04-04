@@ -93,6 +93,8 @@ def write_md_output_flavor(data, filename, METRICS):
             except KeyError:
                 # print (F"{vo} is not available for {site}")
                 pass
+            except TypeError as e:
+                print(F"vo:{vo} / site:{site} / metric:{metric} / flvidx:{flavor_index} problem: {e}")
     output.close
 
 
@@ -111,11 +113,14 @@ SYNERGY_VOS = {
         "lagoproject.net": "egi-lago",
         "eosc-synergy.eu": "egi",
         "covid19.eosc-synergy.eu": "egi",
+        "university.eosc-synergy.eu": "egi",
         "umsa.cerit-sc.cz": "egi",
         "o3as.data.kit.edu": "egi",
         "worsica.vo.incd.pt": "egi",
         "cryoem.instruct-eric.eu": "egi",
-        "mswss.ui.savba.sk": "egi"}
+        "mswss.ui.savba.sk": "egi",
+        "saps-vo.i3m.upv.es": "egi",
+        "EOServices-vo.indra.es": "egi"}
         # "training.egi.eu": "egi",
         # "mteam.data.kit.edu"
 
@@ -169,3 +174,4 @@ METRICS=['cores', 'ram', 'instances', 'gigabytes', 'floating-ips']
 write_md_output_quota(quotas, args.output, METRICS)
 write_md_output_flavor(flavors, args.flavor, ['Name', 'RAM', 'Disk', 'Ephemeral', 'VCPUs', 'Is Public', 'ID'])
 
+# vim: tw=100
