@@ -21,6 +21,14 @@ QUOTA_HTML_FILE="${METRICS_DIR}sla-${DATESTR}.html"
 FLAVOR_MD_FILE="${METRICS_DIR}fla-${DATESTR}.md"
 FLAVOR_HTML_FILE="${METRICS_DIR}fla-${DATESTR}.html"
 
+# Update fedcloudclient config from git
+FEDCLOUD_CATCHALL_OPS="${HOME}/projects/synergy/fedcloud-catchall-operations"
+
+pushd ./ > /dev/null
+cd $FEDCLOUD_CATCHALL_OPS
+git pull
+popd > /dev/null
+
 
 ./collect-sla-metrics.py -o $QUOTA_MD_FILE -f $FLAVOR_MD_FILE
 
